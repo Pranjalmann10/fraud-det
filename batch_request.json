@@ -1,0 +1,74 @@
+{
+  "transactions": [
+    {
+      "transaction_id": "39280fe8-e541-48d9-a725-8131d6f54176",
+      "amount": 843.27,
+      "payer_id": "P2739",
+      "payee_id": "M8919",
+      "payment_mode": "digital_wallet",
+      "channel": "mobile_app",
+      "bank": "Bank of America",
+      "additional_data": {
+        "ip_address": "192.168.85.209",
+        "user_agent": "Mozilla/5.0",
+        "device_id": "D59753"
+      }
+    },
+    {
+      "transaction_id": "a9e1d218-3458-4563-95f2-f44283065010",
+      "amount": 227.53,
+      "payer_id": "P4131",
+      "payee_id": "M2539",
+      "payment_mode": "bank_transfer",
+      "channel": "mobile_app",
+      "bank": "Chase",
+      "additional_data": {
+        "ip_address": "192.168.191.138",
+        "user_agent": "Mozilla/5.0",
+        "device_id": "D13531"
+      }
+    },
+    {
+      "transaction_id": "cd65a805-75a5-4c43-821b-909f5ec941ed",
+      "amount": 149.37,
+      "payer_id": "P7168",
+      "payee_id": "M8938",
+      "payment_mode": "bank_transfer",
+      "channel": "in_store",
+      "bank": "Wells Fargo",
+      "additional_data": {
+        "ip_address": "192.168.161.99",
+        "user_agent": "Mozilla/5.0",
+        "device_id": "D79690"
+      }
+    },
+    {
+      "transaction_id": "9aad0e99-6b33-4ab0-ac50-f70107285a05",
+      "amount": 155.75,
+      "payer_id": "P4160",
+      "payee_id": "M6809",
+      "payment_mode": "credit_card",
+      "channel": "phone",
+      "bank": "Chase",
+      "additional_data": {
+        "ip_address": "192.168.74.221",
+        "user_agent": "Mozilla/5.0",
+        "device_id": "D14588"
+      }
+    },
+    {
+      "transaction_id": "8f80bbbe-d272-46fc-af83-5b2ec1789ef2",
+      "amount": 555.35,
+      "payer_id": "P1139",
+      "payee_id": "M3795",
+      "payment_mode": "debit_card",
+      "channel": "web",
+      "bank": null,
+      "additional_data": {
+        "ip_address": "192.168.238.2",
+        "user_agent": "Mozilla/5.0",
+        "device_id": "D26827"
+      }
+    }
+  ]
+}
