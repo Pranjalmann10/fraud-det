@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import sys
 
-from . import endpoints
-from ..database import models, database
+# Add the parent directory to sys.path to fix import issues
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from src.api import endpoints
+from src.database import models, database
 
 # Create FastAPI app
 app = FastAPI(
@@ -36,3 +40,7 @@ def read_root():
         "docs": "/docs",
         "api": "/api"
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

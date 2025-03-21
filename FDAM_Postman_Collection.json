@@ -159,6 +159,36 @@
 				"description": "Report a transaction as fraudulent. Replace {{transaction_id}} with an actual transaction ID."
 			},
 			"response": []
+		},
+		{
+			"name": "Process JSON Transaction",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"transaction_data\": {\n        \"amount\": 7500.00,\n        \"payer_id\": \"P5678\",\n        \"payee_id\": \"M9012\",\n        \"payment_mode\": \"credit_card\",\n        \"channel\": \"web\",\n        \"bank\": \"CitiBank\",\n        \"additional_data\": {\n            \"ip_address\": \"45.67.89.123\",\n            \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0)\",\n            \"device_id\": \"D67890\",\n            \"location\": \"Chicago\",\n            \"time_of_day\": \"night\"\n        }\n    }\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8000/api/detect-json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"api",
+						"detect-json"
+					]
+				},
+				"description": "Process a transaction provided in JSON format and get detailed fraud detection results"
+			},
+			"response": []
 		}
 	],
 	"event": [

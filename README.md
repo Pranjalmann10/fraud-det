@@ -53,7 +53,7 @@ Once the server is running, access the API documentation at `http://localhost:80
 
 ## Storing Data from the Frontend
 
-The system provides two ways to store transaction data:
+The system provides three ways to store transaction data:
 
 1. **Using the Dashboard Form**:
    - Navigate to the dashboard at `http://localhost:8050`
@@ -63,7 +63,34 @@ The system provides two ways to store transaction data:
    - The transaction will be processed by the API and stored in the database
    - Results will be displayed immediately on the dashboard
 
-2. **Using the Data Generation Scripts**:
+2. **Using JSON Transaction Processing**:
+   - Navigate to the dashboard at `http://localhost:8050`
+   - Scroll down to the "Process JSON Transaction" section in the sidebar
+   - Enter your transaction data in JSON format
+   - Click "Process JSON Transaction"
+   - The transaction will be processed and the detailed fraud detection results will be displayed
+   - The response includes transaction ID, fraud status, source (rule/model), reason, and score
+   
+   Example JSON input:
+   ```json
+   {
+     "amount": 5000.00,
+     "payer_id": "P12345",
+     "payee_id": "M67890",
+     "payment_mode": "credit_card",
+     "channel": "web",
+     "bank": "Chase",
+     "additional_data": {
+       "ip_address": "192.168.1.1",
+       "user_agent": "Mozilla/5.0",
+       "device_id": "D12345",
+       "location": "New York",
+       "time_of_day": "day"
+     }
+   }
+   ```
+
+3. **Using the Data Generation Scripts**:
    - Run `python generate_data.py` to generate random transactions
    - Run `python generate_high_risk_data.py` to generate high-risk transactions
    - Run `python generate_fraud_data.py` to generate potentially fraudulent transactions

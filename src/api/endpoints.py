@@ -6,6 +6,7 @@ import concurrent.futures
 from datetime import datetime
 import json
 from typing import Optional
+import uuid
 
 from ..database import crud, database, models
 from ..models.combined_model import CombinedFraudDetector
@@ -37,9 +38,15 @@ def process_transaction(transaction_dict, db):
     """
     start_time = time.time()
     
+    # Get all active custom rules
+    custom_rules = crud.get_all_custom_rules(db, active_only=True)
+    
+    # Update fraud detector with custom rules
+    fraud_detector.set_custom_rules(custom_rules)
+    
     # Detect fraud with a lower threshold for high-value transactions
-    threshold = 0.1 if transaction_dict.get("amount", 0) > 5000 else 0.5
-    is_fraud, fraud_score, rule_score, ai_score = fraud_detector.detect_fraud(transaction_dict, threshold=threshold)
+    threshold = 0.05 if transaction_dict.get("amount", 0) > 10000 else 0.5
+    is_fraud, fraud_score, rule_score, ai_score, reasons = fraud_detector.detect_fraud(transaction_dict, threshold=threshold)
     
     # Calculate prediction time
     prediction_time_ms = int((time.time() - start_time) * 1000)
@@ -223,52 +230,57 @@ def get_transactions(
     Returns:
         List[schemas.TransactionResponse]: List of transactions
     """
-    # Query transactions with filters
-    query = db.query(models.Transaction)
-    
-    if start_date:
-        query = query.filter(models.Transaction.created_at >= start_date)
-    if end_date:
-        query = query.filter(models.Transaction.created_at <= end_date)
-    if payment_mode:
-        query = query.filter(models.Transaction.payment_mode == payment_mode)
-    if channel:
-        query = query.filter(models.Transaction.channel == channel)
-    if is_fraud is not None:
-        query = query.filter(models.Transaction.is_fraud_predicted == is_fraud)
-    
-    # Apply limit and offset
-    transactions = query.order_by(models.Transaction.created_at.desc()).offset(offset).limit(limit).all()
-    
-    # Convert to response models
-    result = []
-    for tx in transactions:
-        try:
-            # Parse additional_data from JSON string to dict
-            additional_data = {}
-            if tx.additional_data:
-                try:
-                    additional_data = json.loads(tx.additional_data)
-                except:
-                    additional_data = {}
-            
-            result.append(schemas.TransactionResponse(
-                transaction_id=tx.transaction_id,
-                amount=tx.amount,
-                payer_id=tx.payer_id,
-                payee_id=tx.payee_id,
-                payment_mode=tx.payment_mode,
-                channel=tx.channel,
-                bank=tx.bank,
-                additional_data=additional_data,
-                is_fraud_predicted=tx.is_fraud_predicted,
-                fraud_score=tx.fraud_score,
-                prediction_time_ms=tx.prediction_time_ms
-            ))
-        except Exception as e:
-            print(f"Error converting transaction {tx.transaction_id}: {str(e)}")
-    
-    return result
+    try:
+        # Query transactions with filters
+        query = db.query(models.Transaction)
+        
+        if start_date:
+            query = query.filter(models.Transaction.timestamp >= start_date)
+        if end_date:
+            query = query.filter(models.Transaction.timestamp <= end_date)
+        if payment_mode:
+            query = query.filter(models.Transaction.payment_mode == payment_mode)
+        if channel:
+            query = query.filter(models.Transaction.channel == channel)
+        if is_fraud is not None:
+            query = query.filter(models.Transaction.is_fraud_predicted == is_fraud)
+        
+        # Apply limit and offset
+        transactions = query.order_by(models.Transaction.timestamp.desc()).offset(offset).limit(limit).all()
+        
+        # Convert to response models
+        result = []
+        for tx in transactions:
+            try:
+                # Parse additional_data from JSON string to dict
+                additional_data = {}
+                if tx.additional_data:
+                    try:
+                        additional_data = json.loads(tx.additional_data)
+                    except:
+                        additional_data = {}
+                
+                result.append(schemas.TransactionResponse(
+                    transaction_id=tx.transaction_id,
+                    amount=tx.amount,
+                    payer_id=tx.payer_id,
+                    payee_id=tx.payee_id,
+                    payment_mode=tx.payment_mode,
+                    channel=tx.channel,
+                    bank=tx.bank,
+                    additional_data=additional_data,
+                    is_fraud_predicted=tx.is_fraud_predicted,
+                    fraud_score=tx.fraud_score,
+                    prediction_time_ms=tx.prediction_time_ms,
+                    timestamp=tx.timestamp
+                ))
+            except Exception as e:
+                print(f"Error converting transaction {tx.transaction_id}: {str(e)}")
+        
+        return result
+    except Exception as e:
+        print(f"Error retrieving transactions: {str(e)}")
+        return []
 
 @router.get("/reports", response_model=List[schemas.FraudReportResponse])
 def get_fraud_reports(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -311,3 +323,181 @@ def get_metrics(
         predicted_frauds=metrics["predicted_frauds"],
         reported_frauds=metrics["reported_frauds"]
     )
+
+@router.post("/detect-json", response_model=schemas.DetailedFraudResponse)
+def detect_fraud_json(transaction_input: schemas.JsonTransactionInput, db: Session = Depends(get_db)):
+    """
+    Detect fraud for a single transaction provided in JSON format
+    
+    Args:
+        transaction_input (schemas.JsonTransactionInput): Transaction data in JSON format
+        db (Session): Database session
+        
+    Returns:
+        schemas.DetailedFraudResponse: Detailed fraud detection result
+    """
+    # Extract transaction data
+    transaction_data = transaction_input.transaction_data
+    
+    # Ensure transaction_id exists
+    if "transaction_id" not in transaction_data:
+        transaction_data["transaction_id"] = str(uuid.uuid4())
+    
+    # Get all active custom rules
+    custom_rules = crud.get_all_custom_rules(db, active_only=True)
+    
+    # Update fraud detector with custom rules
+    fraud_detector.set_custom_rules(custom_rules)
+    
+    # Process transaction using the fraud detector
+    start_time = time.time()
+    threshold = 0.05 if transaction_data.get("amount", 0) > 10000 else 0.5
+    is_fraud, combined_score, rule_score, ai_score, reasons = fraud_detector.detect_fraud(transaction_data, threshold=threshold)
+    prediction_time_ms = int((time.time() - start_time) * 1000)
+    
+    # Determine fraud source and reason
+    fraud_source = "model" if ai_score > rule_score else "rule"
+    
+    # Generate fraud reason based on source
+    if fraud_source == "rule":
+        if reasons and isinstance(reasons, dict) and "rule_reason" in reasons:
+            fraud_reason = reasons["rule_reason"]
+        elif reasons and isinstance(reasons, list) and len(reasons) > 0:
+            fraud_reason = reasons[0]
+        elif transaction_data.get("amount", 0) > fraud_detector.rule_detector.config["amount_threshold"]:
+            fraud_reason = "High transaction amount"
+        elif transaction_data.get("channel") in fraud_detector.rule_detector.config["high_risk_channels"]:
+            fraud_reason = "High-risk channel"
+        elif transaction_data.get("payment_mode") in fraud_detector.rule_detector.config["high_risk_payment_modes"]:
+            fraud_reason = "High-risk payment mode"
+        else:
+            fraud_reason = "Multiple risk factors"
+    else:
+        fraud_reason = "AI model detection"
+    
+    # Store transaction in database if it contains required fields
+    required_fields = ["amount", "payer_id", "payee_id", "payment_mode", "channel"]
+    if all(field in transaction_data for field in required_fields):
+        try:
+            # Convert additional_data to JSON string if it's a dict
+            additional_data = transaction_data.get("additional_data", {})
+            if isinstance(additional_data, dict):
+                additional_data_str = json.dumps(additional_data)
+            else:
+                additional_data_str = None
+                
+            # Create a new transaction record
+            transaction = models.Transaction(
+                transaction_id=transaction_data["transaction_id"],
+                amount=transaction_data["amount"],
+                payer_id=transaction_data["payer_id"],
+                payee_id=transaction_data["payee_id"],
+                payment_mode=transaction_data["payment_mode"],
+                channel=transaction_data["channel"],
+                bank=transaction_data.get("bank"),
+                additional_data=additional_data_str,
+                is_fraud_predicted=is_fraud,
+                fraud_score=combined_score,
+                prediction_time_ms=prediction_time_ms
+            )
+            
+            # Add and commit
+            db.add(transaction)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Error storing transaction {transaction_data['transaction_id']}: {str(e)}")
+    
+    # Return detailed response
+    return schemas.DetailedFraudResponse(
+        transaction_id=transaction_data["transaction_id"],
+        is_fraud=is_fraud,
+        fraud_source=fraud_source,
+        fraud_reason=fraud_reason,
+        fraud_score=combined_score
+    )
+
+# Custom Rules endpoints
+
+@router.post("/rules", response_model=schemas.CustomRuleResponse)
+def create_rule(rule: schemas.CustomRuleCreate, db: Session = Depends(get_db)):
+    """
+    Create a new custom rule
+    """
+    # Check if rule with this name already exists
+    existing_rule = crud.get_custom_rule_by_name(db, rule.name)
+    if existing_rule:
+        raise HTTPException(status_code=400, detail="Rule with this name already exists")
+    
+    # Create the rule
+    return crud.create_custom_rule(db, rule.dict())
+
+@router.get("/rules", response_model=List[schemas.CustomRuleResponse])
+def get_rules(skip: int = 0, limit: int = 100, active_only: bool = False, db: Session = Depends(get_db)):
+    """
+    Get all custom rules with optional filtering
+    """
+    return crud.get_all_custom_rules(db, skip=skip, limit=limit, active_only=active_only)
+
+@router.get("/rules/{rule_id}", response_model=schemas.CustomRuleResponse)
+def get_rule(rule_id: int, db: Session = Depends(get_db)):
+    """
+    Get a custom rule by ID
+    """
+    rule = crud.get_custom_rule(db, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return rule
+
+@router.put("/rules/{rule_id}", response_model=schemas.CustomRuleResponse)
+def update_rule(rule_id: int, rule_update: schemas.CustomRuleUpdate, db: Session = Depends(get_db)):
+    """
+    Update an existing rule
+    """
+    # Check if rule exists
+    existing_rule = crud.get_custom_rule(db, rule_id)
+    if not existing_rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    
+    # If name is being updated, check it doesn't conflict
+    if rule_update.name and rule_update.name != existing_rule.name:
+        name_exists = crud.get_custom_rule_by_name(db, rule_update.name)
+        if name_exists:
+            raise HTTPException(status_code=400, detail="Rule with this name already exists")
+    
+    # Update the rule
+    updated_rule = crud.update_custom_rule(db, rule_id, rule_update.dict(exclude_unset=True))
+    if not updated_rule:
+        raise HTTPException(status_code=400, detail="Failed to update rule")
+    
+    return updated_rule
+
+@router.delete("/rules/{rule_id}", response_model=bool)
+def delete_rule(rule_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a custom rule
+    """
+    success = crud.delete_custom_rule(db, rule_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return success
+
+@router.patch("/rules/{rule_id}/activate", response_model=schemas.CustomRuleResponse)
+def activate_rule(rule_id: int, db: Session = Depends(get_db)):
+    """
+    Activate a custom rule
+    """
+    rule = crud.activate_deactivate_rule(db, rule_id, True)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return rule
+
+@router.patch("/rules/{rule_id}/deactivate", response_model=schemas.CustomRuleResponse)
+def deactivate_rule(rule_id: int, db: Session = Depends(get_db)):
+    """
+    Deactivate a custom rule
+    """
+    rule = crud.activate_deactivate_rule(db, rule_id, False)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return rule

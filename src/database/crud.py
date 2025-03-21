@@ -103,62 +103,173 @@ def get_metrics(db: Session, start_date: datetime = None, end_date: datetime = N
     """
     Get fraud detection metrics for a given time period
     """
-    # Define query filters
-    filters = []
-    if start_date:
-        filters.append(models.Transaction.created_at >= start_date)
-    if end_date:
-        filters.append(models.Transaction.created_at <= end_date)
-    
-    # Get all transactions matching the filters
-    transactions = db.query(models.Transaction).filter(*filters).all()
-    
-    # Initialize metrics
-    true_positives = 0
-    false_positives = 0
-    true_negatives = 0
-    false_negatives = 0
-    
-    # Calculate confusion matrix
-    for tx in transactions:
-        # Get fraud report for this transaction
-        report = get_fraud_report_by_transaction_id(db, tx.transaction_id)
+    try:
+        # Define query filters
+        filters = []
+        if start_date:
+            filters.append(models.Transaction.created_at >= start_date)
+        if end_date:
+            filters.append(models.Transaction.created_at <= end_date)
         
-        # Determine if this transaction was actually fraudulent
-        is_actually_fraud = report is not None and report.is_fraud_reported
+        # Get all transactions matching the filters
+        transactions = db.query(models.Transaction).filter(*filters).all()
         
-        # Update confusion matrix
-        if tx.is_fraud_predicted and is_actually_fraud:
-            true_positives += 1
-        elif tx.is_fraud_predicted and not is_actually_fraud:
-            false_positives += 1
-        elif not tx.is_fraud_predicted and not is_actually_fraud:
-            true_negatives += 1
-        elif not tx.is_fraud_predicted and is_actually_fraud:
-            false_negatives += 1
+        # Initialize metrics
+        true_positives = 0
+        false_positives = 0
+        true_negatives = 0
+        false_negatives = 0
+        
+        # Calculate confusion matrix
+        for tx in transactions:
+            # Get fraud report for this transaction
+            report = get_fraud_report_by_transaction_id(db, tx.transaction_id)
+            
+            # Determine if this transaction was actually fraudulent
+            is_actually_fraud = report is not None and report.is_fraud_reported
+            
+            # Update confusion matrix
+            if tx.is_fraud_predicted and is_actually_fraud:
+                true_positives += 1
+            elif tx.is_fraud_predicted and not is_actually_fraud:
+                false_positives += 1
+            elif not tx.is_fraud_predicted and not is_actually_fraud:
+                true_negatives += 1
+            elif not tx.is_fraud_predicted and is_actually_fraud:
+                false_negatives += 1
+        
+        # Calculate metrics
+        total_transactions = len(transactions)
+        predicted_frauds = sum(1 for tx in transactions if tx.is_fraud_predicted)
+        reported_frauds = sum(1 for tx in transactions if get_fraud_report_by_transaction_id(db, tx.transaction_id) is not None)
+        
+        # Calculate precision, recall, and F1 score
+        precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+        recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+        f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        # Return metrics
+        return {
+            "confusion_matrix": {
+                "true_positives": true_positives,
+                "false_positives": false_positives,
+                "true_negatives": true_negatives,
+                "false_negatives": false_negatives
+            },
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1_score,
+            "total_transactions": total_transactions,
+            "predicted_frauds": predicted_frauds,
+            "reported_frauds": reported_frauds
+        }
+    except Exception as e:
+        print(f"Error calculating metrics: {str(e)}")
+        # Return default metrics in case of error
+        return {
+            "confusion_matrix": {
+                "true_positives": 0,
+                "false_positives": 0,
+                "true_negatives": 0,
+                "false_negatives": 0
+            },
+            "precision": 0,
+            "recall": 0,
+            "f1_score": 0,
+            "total_transactions": 0,
+            "predicted_frauds": 0,
+            "reported_frauds": 0
+        }
+
+# Custom Rule CRUD operations
+
+def create_custom_rule(db: Session, rule_data: dict):
+    """
+    Create a new custom rule in the database
+    """
+    db_rule = models.CustomRule(
+        name=rule_data["name"],
+        description=rule_data.get("description"),
+        rule_type=rule_data["rule_type"],
+        field=rule_data["field"],
+        operator=rule_data["operator"],
+        value=str(rule_data["value"]),
+        score=float(rule_data["score"]),
+        is_active=rule_data.get("is_active", True),
+        priority=rule_data.get("priority", 1),
+        advanced_config=rule_data.get("advanced_config")
+    )
+    db.add(db_rule)
+    db.commit()
+    db.refresh(db_rule)
+    return db_rule
+
+def get_custom_rule(db: Session, rule_id: int):
+    """
+    Get a custom rule by its ID
+    """
+    return db.query(models.CustomRule).filter(models.CustomRule.id == rule_id).first()
+
+def get_custom_rule_by_name(db: Session, name: str):
+    """
+    Get a custom rule by its name
+    """
+    return db.query(models.CustomRule).filter(models.CustomRule.name == name).first()
+
+def get_all_custom_rules(db: Session, skip: int = 0, limit: int = 100, active_only: bool = False):
+    """
+    Get all custom rules with optional pagination and filtering
+    """
+    query = db.query(models.CustomRule)
     
-    # Calculate metrics
-    total_transactions = len(transactions)
-    predicted_frauds = sum(1 for tx in transactions if tx.is_fraud_predicted)
-    reported_frauds = sum(1 for tx in transactions if get_fraud_report_by_transaction_id(db, tx.transaction_id) is not None)
+    if active_only:
+        query = query.filter(models.CustomRule.is_active == True)
     
-    # Calculate precision, recall, and F1 score
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
-    f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    # Order by priority (highest first) and then by ID
+    return query.order_by(models.CustomRule.priority.desc(), models.CustomRule.id).offset(skip).limit(limit).all()
+
+def update_custom_rule(db: Session, rule_id: int, rule_data: dict):
+    """
+    Update an existing custom rule
+    """
+    db_rule = get_custom_rule(db, rule_id)
+    if not db_rule:
+        return None
     
-    # Return metrics
-    return {
-        "confusion_matrix": {
-            "true_positives": true_positives,
-            "false_positives": false_positives,
-            "true_negatives": true_negatives,
-            "false_negatives": false_negatives
-        },
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1_score,
-        "total_transactions": total_transactions,
-        "predicted_frauds": predicted_frauds,
-        "reported_frauds": reported_frauds
-    }
+    # Update fields if they exist in the rule_data
+    for key, value in rule_data.items():
+        if key in ["name", "description", "rule_type", "field", "operator", "priority", "is_active", "advanced_config"]:
+            setattr(db_rule, key, value)
+        elif key == "value":
+            setattr(db_rule, key, str(value))
+        elif key == "score":
+            setattr(db_rule, key, float(value))
+    
+    db.commit()
+    db.refresh(db_rule)
+    return db_rule
+
+def delete_custom_rule(db: Session, rule_id: int):
+    """
+    Delete a custom rule
+    """
+    db_rule = get_custom_rule(db, rule_id)
+    if not db_rule:
+        return False
+    
+    db.delete(db_rule)
+    db.commit()
+    return True
+
+def activate_deactivate_rule(db: Session, rule_id: int, is_active: bool):
+    """
+    Activate or deactivate a custom rule
+    """
+    db_rule = get_custom_rule(db, rule_id)
+    if not db_rule:
+        return None
+    
+    db_rule.is_active = is_active
+    db.commit()
+    db.refresh(db_rule)
+    return db_rule

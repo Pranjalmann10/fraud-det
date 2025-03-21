@@ -134,7 +134,15 @@ class AIFraudDetector:
         """
         # If model is not trained, return a default prediction
         if self.model is None or not hasattr(self.model, 'classes_'):
-            return False, 0.0
+            # Apply basic heuristics for large transactions when model isn't available
+            amount = transaction.get("amount", 0)
+            if amount > 50000:
+                return True, 0.8
+            elif amount > 25000:
+                return True, 0.6
+            elif amount > 10000:
+                return False, 0.4
+            return False, 0.09
         
         # Preprocess the transaction
         features = self.preprocess_transaction(transaction)
@@ -142,6 +150,15 @@ class AIFraudDetector:
         # Get the probability of fraud
         probabilities = self.model.predict_proba(features)[0]
         fraud_probability = probabilities[1] if len(probabilities) > 1 else 0.0
+        
+        # Adjust probability based on transaction amount for more sensitivity
+        amount = transaction.get("amount", 0)
+        if amount > 50000:
+            fraud_probability = max(fraud_probability, 0.8)
+        elif amount > 25000:
+            fraud_probability = max(fraud_probability, 0.6)
+        elif amount > 10000:
+            fraud_probability = max(fraud_probability, 0.4)
         
         # Predict fraud if probability exceeds threshold (0.5)
         is_fraudulent = fraud_probability >= 0.5

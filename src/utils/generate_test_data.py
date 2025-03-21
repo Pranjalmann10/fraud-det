@@ -103,9 +103,43 @@ def generate_batch_request(num_transactions=10, output_file="batch_request.json"
     print(f"Generated batch request with {num_transactions} transactions and saved to {output_file}")
     return batch_request
 
+def generate_and_store_transactions(num_transactions=10):
+    """
+    Generate random transactions and store them in the database via the API
+    
+    Args:
+        num_transactions (int): Number of transactions to generate
+    """
+    import requests
+    
+    API_BASE_URL = "http://localhost:8000/api"
+    
+    print(f"Generating and storing {num_transactions} random transactions...")
+    
+    for i in range(num_transactions):
+        transaction = generate_transaction()
+        
+        try:
+            response = requests.post(f"{API_BASE_URL}/detect", json=transaction)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"Transaction {i+1}/{num_transactions} stored with ID: {result['transaction_id']}")
+                print(f"  Fraud Status: {'Fraudulent' if result['is_fraud_predicted'] else 'Legitimate'}")
+                print(f"  Fraud Score: {result['fraud_score']:.4f}")
+            else:
+                print(f"Error storing transaction {i+1}: {response.status_code} - {response.text}")
+        except Exception as e:
+            print(f"Exception while storing transaction {i+1}: {str(e)}")
+    
+    print("Transaction generation complete.")
+
 if __name__ == "__main__":
     # Generate test data
     generate_test_data(num_transactions=100, output_file="test_data.json")
     
     # Generate batch request
     generate_batch_request(num_transactions=10, output_file="batch_request.json")
+    
+    # Generate and store transactions
+    generate_and_store_transactions(num_transactions=10)
