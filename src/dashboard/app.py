@@ -9,6 +9,7 @@ import requests
 import json
 import uuid
 from datetime import datetime, timedelta
+import os
 
 # Initialize the Dash app with a Bootstrap theme
 app = dash.Dash(
@@ -19,8 +20,8 @@ app = dash.Dash(
 
 app.title = "Fraud Detection Dashboard"
 
-# API endpoints
-API_BASE_URL = "http://localhost:8001/api"
+# API base URL - configurable through environment variables
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8001/api")
 TRANSACTIONS_URL = f"{API_BASE_URL}/transactions"
 METRICS_URL = f"{API_BASE_URL}/metrics"
 RULES_URL = f"{API_BASE_URL}/rules"
@@ -1701,4 +1702,5 @@ def submit_json_transaction(n_clicks, json_input, current_transactions):
 
 # Run the app
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    port = int(os.environ.get("PORT", 8050))
+    app.run_server(debug=True, port=port)

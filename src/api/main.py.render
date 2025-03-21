@@ -1,0 +1,11 @@
+import os
+import sys
+from pathlib import Path
+
+# Add the parent directory to the path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.api.main import app
+
+# This file is used by Render.com for deployment
+# The app variable is imported from the original main.py file
