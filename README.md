@@ -149,3 +149,35 @@ All data is stored in an SQLite database located at `./fraud_detection.db`. The 
    - Links to transactions via transaction_id
 
 The dashboard automatically refreshes to display the latest data from the database.
+
+## Azure Deployment
+
+This project is configured for deployment to Microsoft Azure using GitHub Actions. The deployment process is automated and includes:
+
+1. **Azure App Services**: Two separate web apps for the API and Dashboard
+2. **Azure Database for PostgreSQL**: For production data storage
+3. **Azure Key Vault**: For secure storage of connection strings and secrets
+
+For detailed deployment instructions, see [AZURE_DEPLOYMENT.md](./AZURE_DEPLOYMENT.md).
+
+### Quick Start for Azure
+
+1. Fork this repository to your GitHub account
+2. Set up Azure resources as described in the deployment guide
+3. Configure GitHub Actions secrets
+4. Push to the main branch to trigger deployment
+5. Access your apps at:
+   - API: `https://<your-api-app-name>.azurewebsites.net`
+   - Dashboard: `https://<your-dashboard-app-name>.azurewebsites.net`
+
+### Environment Variables for Azure
+
+The application reads the following environment variables:
+
+- `DATABASE_URL`: PostgreSQL connection string
+- `API_BASE_URL`: URL for the Dashboard to connect to the API
+- `DEBUG`: Set to "false" in production
+- `PORT`: Default is 8001 for API and 8050 for Dashboard
+- `HOST`: Default is "0.0.0.0"
+
+For more information on setting these variables in Azure, see the deployment guide.

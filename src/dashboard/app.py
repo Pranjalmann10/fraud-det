@@ -18,6 +18,9 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
 )
 
+# Create a server variable for Azure to use
+server = app.server
+
 app.title = "Fraud Detection Dashboard"
 
 # API base URL - configurable through environment variables
@@ -1703,4 +1706,6 @@ def submit_json_transaction(n_clicks, json_input, current_transactions):
 # Run the app
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
-    app.run_server(debug=True, port=port)
+    debug = os.environ.get("DEBUG", "True").lower() == "true"
+    host = os.environ.get("HOST", "0.0.0.0")
+    app.run_server(debug=debug, host=host, port=port)
